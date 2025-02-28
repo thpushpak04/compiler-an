@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JavaScript Code Editor</title>
+    <style>
+      /* Light theme variables */
+      :root {
+        --bg-color: #ffffff;
+        --text-color: #333;
+        --border-color: #ddd;
+        --accent-color: #2563eb;
+        --sidebar-bg: #f6f6f6;
+        --editor-bg: #fff;
+        --terminal-bg: #222;
+        --terminal-text: #eee;
+        --success-color: #22c55e;
+        --resize-hover-bg: rgba(0, 0, 0, 0.1);
+      }
+      /* Dark theme */
+      body.dark-mode {
+        --bg-color: #181818;
+        --text-color: #ddd;
+        --border-color: #444;
+        --accent-color: #3b82f6;
+        --sidebar-bg: #222;
+        --editor-bg: #1e1e1e;
+        --terminal-bg: #000;
+        --terminal-text: #fff;
+        --resize-hover-bg: rgba(255, 255, 255, 0.1);
+      }
+      /* Basic reset */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html, body {
+        height: 100%;
+      }
+      body {
+        font-family: -apple-system, system-ui, sans-serif;
+        background: var(--bg-color);
+        color: var(--text-color);
+      }
+      .container {
+        display: flex;
+        height: 100vh;
+      }
+      /* File Manager Sidebar */
+      .file-manager {
+        min-width: 200px;
+        width: 250px;
+        background: var(--sidebar-bg);
+        border-right: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        transition: width 0.3s ease;
+      }
+      .section-header {
+        padding: 8px 16px;
+        font-weight: bold;
+        background: var(--sidebar-bg);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .section-header button {
+        padding: 2px 6px;
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      /* Resize handles */
+      .resize-handle {
+        position: absolute;
+        z-index: 1;
+      }
+      .resize-handle-x {
+        cursor: col-resize;
+        width: 4px;
+        top: 0;
+        right: -2px;
+        bottom: 0;
+      }
+      .resize-handle-x:hover {
+        background: var(--resize-hover-bg);
+      }
+      .file-manager .toolbar {
+        padding: 8px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        gap: 8px;
+      }
+      .file-manager .toolbar button {
+        flex: 1;
+        padding: 8px;
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .file-list {
+        flex: 1;
+        overflow-y: auto;
+      }
+      .file-item {
+        padding: 8px 16px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .file-item:hover,
+      .file-item.active {
+        background: var(--accent-color);
+        color: white;
+      }
+      .file-item .file-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+      }
+      .file-item .file-actions {
+        display: flex;
+        gap: 4px;
+      }
+      .file-item .file-actions button {
+        background: none;
+        border: none;
+        color: inherit;
+        cursor: pointer;
+        padding: 0 4px;
+        font-size: 14px;
+      }
+      .file-item .file-arrow {
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      .file-item.active .file-arrow {
+        opacity: 1;
+      }
+      /* Main content area */
+      .main-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 300px;
+      }
+      /* Toolbar styles */
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px;
+        background: var(--sidebar-bg);
+        border-bottom: 1px solid var(--border-color);
+      }
+      .toolbar button {
+        margin-right: 8px;
+        padding: 6px 12px;
+        background: var(--accent-color);
+        border: none;
+        color: white;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      .toolbar button:hover {
+        opacity: 0.9;
+      }
+      .toolbar button.save {
+        background: var(--success-color);
+      }
+      /* Editor container with line numbers */
+      .editor-container {
+        flex: 1;
+        position: relative;
+        min-height: 100px;
+        display: flex;
+        overflow: hidden;
+      }
+      .line-numbers {
+        padding: 16px 8px;
+        background: var(--sidebar-bg);
+        border-right: 1px solid var(--border-color);
+        color: var(--text-color);
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        text-align: right;
+        user-select: none;
+        min-width: 40px;
+        width: 40px;
+      }
+      #editor {
+        flex: 1;
+        padding: 16px;
+        padding-left: 8px;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        border: none;
+        outline: none;
+        resize: none;
+        background: var(--editor-bg);
+        color: var(--text-color);
+      }
+      /* Status bar */
+      .status-bar {
+        padding: 4px 16px;
+        background: var(--sidebar-bg);
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+      }
+      /* Terminal styles */
+      .terminal {
+        height: 150px;
+        background: var(--terminal-bg);
+        color: var(--terminal-text);
+        overflow-y: auto;
+        border-top: 1px solid var(--border-color);
+        position: relative;
+        transition: height 0.3s ease;
+        resize: vertical;
+        min-height: 40px;
+        max-height: calc(100vh - 200px);
+      }
+      .terminal::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        cursor: row-resize;
+        background: var(--border-color);
+        transition: background-color 0.2s;
+      }
+      .terminal:hover::before {
+        background: var(--accent-color);
+      }
+      .terminal-content {
+        padding: 8px 16px;
+        white-space: pre-wrap;
+      }
+      /* Hidden inputs */
+      .hidden-input {
+        display: none;
+      }
+      /* Modal styles */
+      .modal {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--bg-color);
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        z-index: 1000;
+        width: 90%;
+        max-width: 500px;
+      }
+      .modal h2 {
+        margin-bottom: 15px;
+      }
+      .modal-content {
+        display: flex;
+        gap: 20px;
+      }
+      .modal-content .share-url {
+        flex: 1;
+      }
+      .modal-content .qr-code {
+        width: 150px;
+        height: 150px;
+        background: white;
+      }
+      .modal input {
+        width: 100%;
+        padding: 8px;
+        margin: 10px 0;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background: var(--editor-bg);
+        color: var(--text-color);
+      }
+      .modal-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 15px;
+      }
+      .overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+      }
+      .modal.active,
+      .overlay.active {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <aside class="file-manager">
+        <div class="section-header">
+          Files
+          <button onclick="toggleFileManager()">⇄</button>
+        </div>
+        <div class="toolbar">
+          <button onclick="createNewFile()">New File</button>
+          <button onclick="openFileInput.click()">Open</button>
+        </div>
+        <div id="fileList" class="file-list"></div>
+        <div class="resize-handle resize-handle-x"></div>
+      </aside>
+      <section class="main-content">
+        <div class="section-header">Code Editor</div>
+        <div class="toolbar">
+          <div>
+            <button onclick="saveToDevice()" class="save">Save</button>
+            <button onclick="runCode()">Run</button>
+            <button onclick="shareCode()">Share</button>
+            <button onclick="clearEditor()">Clear Editor</button>
+            <button onclick="clearTerminal()">Clear Terminal</button>
+          </div>
+          <div>
+            <button onclick="toggleTheme()">Toggle Theme</button>
+            <button onclick="toggleFullscreen()">Fullscreen</button>
+          </div>
+        </div>
+        <div class="editor-container">
+          <div class="line-numbers" id="lineNumbers"></div>
+          <textarea id="editor" spellcheck="false" placeholder="Type your code here..."></textarea>
+        </div>
+        <div class="status-bar">
+          <span id="lineCount">Lines: 1</span>
+          <span id="cursorPos">Ln 1, Col 1</span>
+        </div>
+        <div class="terminal">
+          <div class="section-header">
+            Terminal Output
+            <button onclick="toggleTerminal()">⇅</button>
+          </div>
+          <div id="terminalContent" class="terminal-content"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="openFileInput" class="hidden-input" accept=".js,.txt" />
+
+    <!-- Share Modal -->
+    <div class="overlay" id="overlay"></div>
+    <div class="modal" id="shareModal">
+      <h2>Share Code</h2>
+      <div class="modal-content">
+        <div class="share-url">
+          <p>Share this URL to share your code:</p>
+          <input type="text" id="shareUrl" readonly onclick="this.select()" />
+          <div class="modal-buttons">
+            <button onclick="copyShareUrl()">Copy URL</button>
+            <button onclick="closeShareModal()">Close</button>
+          </div>
+        </div>
+        <div class="qr-code" id="qrCode"></div>
+      </div>
+    </div>
+
+    <!-- QR Code Generator Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
+
+    <script>
+      // Global state
+      let currentFileId = null;
+      let currentFileName = "untitled.js";
+
+      // Resize functionality
+      function initResize() {
+        const fileManager = document.querySelector('.file-manager');
+        const terminal = document.querySelector('.terminal');
+        const resizeHandleX = document.querySelector('.resize-handle-x');
+
+        let isResizingX = false;
+        let startX, startWidth;
+
+        // Horizontal resize (file manager)
+        resizeHandleX.addEventListener('mousedown', (e) => {
+          isResizingX = true;
+          startX = e.clientX;
+          startWidth = parseInt(getComputedStyle(fileManager).width, 10);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+          if (isResizingX) {
+            const width = startWidth + (e.clientX - startX);
+            if (width >= 200 && width <= window.innerWidth - 300) {
+              fileManager.style.width = width + 'px';
+            }
+          }
+        });
+
+        document.addEventListener('mouseup', () => {
+          isResizingX = false;
+        });
+
+        // Make terminal resizable
+        terminal.style.resize = 'vertical';
+        const terminalHeader = terminal.querySelector('.section-header');
+
+        terminalHeader.addEventListener('mousedown', (e) => {
+          if (e.target === terminalHeader) {
+            const startY = e.clientY;
+            const startHeight = terminal.offsetHeight;
+
+            function onMouseMove(e) {
+              const delta = startY - e.clientY;
+              const newHeight = Math.max(40, Math.min(startHeight + delta, window.innerHeight - 200));
+              terminal.style.height = newHeight + 'px';
+            }
+
+            function onMouseUp() {
+              document.removeEventListener('mousemove', onMouseMove);
+              document.removeEventListener('mouseup', onMouseUp);
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+          }
+        });
+      }
+
+      // Initialize resize functionality
+      initResize();
+
+      // Toggle panels
+      function toggleFileManager() {
+        const fileManager = document.querySelector('.file-manager');
+        fileManager.style.width = fileManager.style.width === '50px' ? '250px' : '50px';
+      }
+
+      function toggleTerminal() {
+        const terminal = document.querySelector('.terminal');
+        terminal.style.height = terminal.style.height === '40px' ? '150px' : '40px';
+      }
+
+      // File system integration
+      const openFileInput = document.getElementById('openFileInput');
+
+      openFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          currentFileName = file.name;
+          editor.value = e.target.result;
+          // Save to localStorage
+          const id = 'file_' + Date.now();
+          localStorage.setItem(id, JSON.stringify({
+            name: currentFileName,
+            content: e.target.result,
+            timestamp: Date.now()
+          }));
+          currentFileId = id;
+          updateFileList();
+          updateStatusBar();
+          updateLineNumbers();
+        };
+        reader.readAsText(file);
+      });
+
+      function saveToDevice() {
+        // First save to localStorage
+        if (!currentFileId) {
+          const name = prompt('Enter file name:', 'untitled.js');
+          if (!name) return;
+          currentFileName = name;
+
+          // Create new file in localStorage
+          const id = 'file_' + Date.now();
+          localStorage.setItem(id, JSON.stringify({
+            name: currentFileName,
+            content: editor.value,
+            timestamp: Date.now()
+          }));
+          currentFileId = id;
+          updateFileList();
+        } else {
+          // Update existing file in localStorage
+          const file = JSON.parse(localStorage.getItem(currentFileId));
+          if (file) {
+            file.content = editor.value;
+            file.timestamp = Date.now();
+            localStorage.setItem(currentFileId, JSON.stringify(file));
+            updateFileList();
+          }
+        }
+
+        // Visual feedback for compiler save
+        const saveBtn = document.querySelector("button.save");
+        saveBtn.textContent = "Saved!";
+        setTimeout(() => {
+          saveBtn.textContent = "Save";
+        }, 1000);
+
+        // Then ask if want to save locally
+        if (confirm('Do you want to save the file to your device?')) {
+          const content = editor.value;
+          const blob = new Blob([content], { type: 'text/javascript' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = currentFileName;
+          a.click();
+          URL.revokeObjectURL(a.href);
+        }
+      }
+
+      // File Management
+      function createNewFile() {
+        const name = prompt('Enter file name:', 'untitled.js');
+        if (!name) return;
+        currentFileName = name;
+
+        // Save to localStorage
+        const id = 'file_' + Date.now();
+        localStorage.setItem(id, JSON.stringify({
+          name: currentFileName,
+          content: '',
+          timestamp: Date.now()
+        }));
+        currentFileId = id;
+        editor.value = '';
+        updateFileList();
+        updateStatusBar();
+        updateLineNumbers();
+      }
+
+      function updateFileList() {
+        const fileList = document.getElementById('fileList');
+        fileList.innerHTML = '';
+
+        // Get all files from localStorage
+        const files = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key.startsWith('file_')) {
+            const file = JSON.parse(localStorage.getItem(key));
+            files.push({ id: key, ...file });
+          }
+        }
+
+        // Sort files by timestamp
+        files.sort((a, b) => b.timestamp - a.timestamp);
+
+        // Create file elements
+        files.forEach(file => {
+          const div = document.createElement('div');
+          div.className = `file-item${currentFileId === file.id ? ' active' : ''}`;
+          div.innerHTML = `
+            <div class="file-name">
+              <span class="file-arrow">▶</span>
+              <span>${file.name}</span>
+            </div>
+            <div class="file-actions">
+              <button onclick="renameFile('${file.id}', event)" title="Rename">✏️</button>
+              <button onclick="deleteFile('${file.id}', event)" title="Delete">×</button>
+            </div>
+          `;
+          div.onclick = () => loadFile(file.id);
+          fileList.appendChild(div);
+        });
+      }
+
+      function loadFile(id) {
+        const file = JSON.parse(localStorage.getItem(id));
+        if (file) {
+          currentFileId = id;
+          currentFileName = file.name;
+          editor.value = file.content;
+          updateFileList();
+          updateStatusBar();
+          updateLineNumbers();
+        }
+      }
+
+      function renameFile(id, event) {
+        event.stopPropagation();
+        const file = JSON.parse(localStorage.getItem(id));
+        if (!file) return;
+
+        const newName = prompt('Enter new file name:', file.name);
+        if (!newName || newName === file.name) return;
+
+        file.name = newName;
+        if (currentFileId === id) {
+          currentFileName = newName;
+        }
+        localStorage.setItem(id, JSON.stringify(file));
+        updateFileList();
+      }
+
+      function deleteFile(id, event) {
+        event.stopPropagation();
+        if (confirm('Delete this file?')) {
+          localStorage.removeItem(id);
+          if (currentFileId === id) {
+            currentFileId = null;
+            currentFileName = 'untitled.js';
+            editor.value = '';
+            updateLineNumbers();
+          }
+          updateFileList();
+          updateStatusBar();
+        }
+      }
+
+      // Editor Functions
+      const editor = document.getElementById('editor');
+
+      editor.addEventListener('input', () => {
+        if (currentFileId) {
+          const file = JSON.parse(localStorage.getItem(currentFileId));
+          if (file) {
+            file.content = editor.value;
+            file.timestamp = Date.now();
+            localStorage.setItem(currentFileId, JSON.stringify(file));
+          }
+        }
+        updateStatusBar();
+        updateLineNumbers();
+      });
+
+      editor.addEventListener('keyup', updateStatusBar);
+      editor.addEventListener('click', updateStatusBar);
+
+      // Save with Ctrl+S
+      document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 's') {
+          e.preventDefault();
+          saveToDevice();
+        }
+      });
+
+      function updateStatusBar() {
+        const text = editor.value;
+        const lines = text.split('\n');
+        document.getElementById('lineCount').textContent = `Lines: ${lines.length}`;
+
+        const cursorPos = editor.selectionStart;
+        let currentLine = 1;
+        let currentCol = 1;
+        for (let i = 0; i < cursorPos; i++) {
+          if (text[i] === '\n') {
+            currentLine++;
+            currentCol = 1;
+          } else {
+            currentCol++;
+          }
+        }
+        document.getElementById('cursorPos').textContent = `Ln ${currentLine}, Col ${currentCol}`;
+      }
+
+      function updateLineNumbers() {
+        const lineNumbers = document.getElementById('lineNumbers');
+        const lines = editor.value.split('\n');
+        lineNumbers.innerHTML = lines.map((_, i) => i + 1).join('\n');
+      }
+
+      // Sync scroll between editor and line numbers
+      editor.addEventListener('scroll', () => {
+        document.getElementById('lineNumbers').scrollTop = editor.scrollTop;
+      });
+
+      function clearEditor() {
+        editor.value = '';
+        updateStatusBar();
+        updateLineNumbers();
+      }
+
+      // Terminal functions
+      const terminal = document.getElementById('terminalContent');
+
+      function clearTerminal() {
+        terminal.textContent = '';
+      }
+
+      function runCode() {
+        clearTerminal();
+        try {
+          const logs = [];
+          const originalLog = console.log;
+          console.log = (...args) => {
+            logs.push(args.join(" "));
+            originalLog.apply(console, args);
+          };
+          new Function(editor.value)();
+          console.log = originalLog;
+          terminal.textContent = logs.join("\n");
+        } catch (error) {
+          terminal.textContent = `Error: ${error.message}`;
+        }
+      }
+
+      // Share Code with QR Code
+      function shareCode() {
+        if (!editor.value.trim()) {
+          alert('Please write some code first');
+          return;
+        }
+
+        const shareData = {
+          name: currentFileName,
+          content: editor.value
+        };
+
+        const shareUrl = `${window.location.href.split('?')[0]}?share=${btoa(JSON.stringify(shareData))}`;
+        document.getElementById('shareUrl').value = shareUrl;
+
+        // Generate QR Code
+        QRCode.toCanvas(document.getElementById('qrCode'), shareUrl, {
+          width: 150,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#ffffff'
+          }
+        });
+
+        document.getElementById('overlay').classList.add('active');
+        document.getElementById('shareModal').classList.add('active');
+      }
+
+      function copyShareUrl() {
+        const shareUrl = document.getElementById('shareUrl');
+        shareUrl.select();
+        document.execCommand('copy');
+        alert('URL copied to clipboard!');
+      }
+
+      function closeShareModal() {
+        document.getElementById('overlay').classList.remove('active');
+        document.getElementById('shareModal').classList.remove('active');
+      }
+
+      // Theme and Fullscreen Toggle
+      function toggleTheme() {
+        document.body.classList.toggle("dark-mode");
+      }
+
+      function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
+      }
+
+      // Load shared code if available
+      window.onload = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sharedCode = urlParams.get('share');
+
+        if (sharedCode) {
+          try {
+            const { name, content } = JSON.parse(atob(sharedCode));
+            const id = 'file_' + Date.now();
+            localStorage.setItem(id, JSON.stringify({
+              name,
+              content,
+              timestamp: Date.now()
+            }));
+            currentFileId = id;
+            currentFileName = name;
+            editor.value = content;
+            updateLineNumbers();
+          } catch (error) {
+            console.error('Failed to load shared code:', error);
+          }
+        }
+
+        updateFileList();
+        updateStatusBar();
+        updateLineNumbers();
+      };
+    </script>
+  </body>
+</html>
